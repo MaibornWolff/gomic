@@ -1,0 +1,28 @@
+version: "3"
+
+services:
+  gomic:
+    image: gomic
+    ports:
+      - "8080:8080"
+    environment:
+      - MONGODB_HOST=mongodb://mongodb:27017
+    depends_on:
+      - mongodb
+    networks:
+      - network1
+
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - "mongodata:/data/db"
+    networks:
+      - network1
+
+volumes:
+   mongodata:
+
+networks:
+   network1:
