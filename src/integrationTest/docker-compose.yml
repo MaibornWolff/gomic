@@ -7,8 +7,14 @@ services:
       - "8080:8080"
     environment:
       - MONGODB_HOST=mongodb://mongodb:27017
+      - RABBITMQ_HOST=amqp://guest:guest@rabbitmq:5672
+      - RABBITMQ_EXCHANGE=test-exchange
+      - RABBITMQ_QUEUE=test-queue
+      - RABBITMQ_BINDING_KEY=test-key
     depends_on:
       - mongodb
+      - rabbitmq
+    restart: on-failure
     networks:
       - network1
 
@@ -16,13 +22,25 @@ services:
     image: mongo
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "telnet", "mongodb://localhost:27017"]
     volumes:
       - "mongodata:/data/db"
     networks:
       - network1
 
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15672"]
+    networks:
+      - network1
+
 volumes:
-   mongodata:
+  mongodata:
 
 networks:
-   network1:
+  network1:
