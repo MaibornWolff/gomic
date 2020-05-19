@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/micro/go-micro/v2/web"
+	"context"
 	"log"
 	"maibornwolff.de/gomic/mongodb"
 	"maibornwolff.de/gomic/rabbitmq"
@@ -23,34 +23,24 @@ var (
 
 func main() {
 	mongo := mongodb.Connect(mongodbHost)
-	defer mongo.Shutdown()
+	defer mongo.Disconnect(context.Background())
 
 	consumer, err := rabbitmq.NewConsumer(
 		rabbitmqHost, rabbitmqExchange, rabbitmqExchangeType, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
 		func(data []byte) {
-			handleAmqpMessage(data, mongo, mongodbDatabase, mongodbCollection)
+			handleIncomingMessage(data, mongo, mongodbDatabase, mongodbCollection)
 		})
 	if err != nil {
 		log.Fatalf("Failed to create RabbitMQ consumer: %s", err)
 	}
 	defer consumer.Shutdown()
 
-	service := web.NewService(
-		web.Name("foobar"),
-		web.Address(":8080"),
-	)
-
-	service.HandleFunc("/data", func(writer http.ResponseWriter, request *http.Request) {
+	http.HandleFunc("/data", func(writer http.ResponseWriter, request *http.Request) {
 		handleFindData(mongo, mongodbDatabase, mongodbCollection, writer)
 	})
 
-	err = service.Init()
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
-		log.Fatalf("Failed to init service: %s", err)
-	}
-
-	err = service.Run()
-	if err != nil {
-		log.Fatalf("Failed to run service: %s", err)
+		log.Fatalf("Failed to listen and serve: %s", err)
 	}
 }
