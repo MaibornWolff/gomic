@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"maibornwolff.de/gomic/model"
+	"maibornwolff.de/gomic/rabbitmq"
 	"net/http"
-	"strings"
 )
 
 func handleFindData(mongo *mongo.Client, database string, collection string, writer http.ResponseWriter) {
@@ -31,18 +32,16 @@ func handleFindData(mongo *mongo.Client, database string, collection string, wri
 	}
 	log.Printf("Found %d Persons", len(persons))
 
-	results := make([]string, len(persons))
 	for _, person := range persons {
-		results = append(results, fmt.Sprintf("%s %s", person.FirstName, person.LastName))
-	}
-
-	_, err = writer.Write([]byte(strings.Join(results, "\n")))
-	if err != nil {
-		log.Printf("Failed to write response: %s", err)
+		_, err = writer.Write([]byte(fmt.Sprintf("%s %s\n", person.FirstName, person.LastName)))
+		if err != nil {
+			log.Printf("Failed to write response: %s", err)
+			return
+		}
 	}
 }
 
-func handleIncomingMessage(data []byte, mongo *mongo.Client, database string, collection string) {
+func handleIncomingMessage(data []byte, mongo *mongo.Client, database string, collection string, channel *amqp.Channel, exchange string, routingKey string) {
 	log.Printf("Trying to insert incoming message into MongoDB: %s", string(data))
 
 	var person model.Person
@@ -54,5 +53,10 @@ func handleIncomingMessage(data []byte, mongo *mongo.Client, database string, co
 	_, err = mongo.Database(database).Collection(collection).InsertOne(context.Background(), person)
 	if err != nil {
 		log.Printf("Failed to insert Person into MongoDB: %s", err)
+	}
+
+	err = rabbitmq.Publish(channel, exchange, routingKey, data, true)
+	if err != nil {
+		log.Printf("Failed to publish message: %s", err)
 	}
 }

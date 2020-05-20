@@ -6,55 +6,9 @@ import (
 	"log"
 )
 
-type Consumer struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
-	tag     string
-	done    chan error
-}
-
-func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string, handler func([]byte)) (*Consumer, error) {
-	c := &Consumer{
-		conn:    nil,
-		channel: nil,
-		tag:     ctag,
-		done:    make(chan error),
-	}
-
-	var err error
-
-	log.Printf("Dialing %q", amqpURI)
-	c.conn, err = amqp.Dial(amqpURI)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to dial: %s", err)
-	}
-
-	go func() {
-		fmt.Printf("Closing: %s", <-c.conn.NotifyClose(make(chan *amqp.Error)))
-	}()
-
-	log.Printf("Got connection, getting channel")
-	c.channel, err = c.conn.Channel()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get channel: %s", err)
-	}
-
-	log.Printf("Got Channel, declaring exchange (%q)", exchange)
-	err = c.channel.ExchangeDeclare(
-		exchange,
-		exchangeType,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to declare exchange: %s", err)
-	}
-
-	log.Printf("Declared Exchange, declaring queue %q", queueName)
-	queue, err := c.channel.QueueDeclare(
+func Consume(channel *amqp.Channel, exchange string, queueName string, key string, ctag string, handler func([]byte)) (func() error, error) {
+	log.Printf("Declaring queue %q", queueName)
+	queue, err := channel.QueueDeclare(
 		queueName,
 		true,
 		false,
@@ -66,10 +20,10 @@ func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string, h
 		return nil, fmt.Errorf("Failed to declare queue: %s", err)
 	}
 
-	log.Printf("Declared queue (%q %d messages, %d consumers), binding to exchange (key %q)",
-		queue.Name, queue.Messages, queue.Consumers, key)
+	log.Printf("Declared queue (%q, %d messages, %d consumers), binding to exchange (%q, key %q)",
+		queue.Name, queue.Messages, queue.Consumers, exchange, key)
 
-	err = c.channel.QueueBind(
+	err = channel.QueueBind(
 		queue.Name,
 		key,
 		exchange,
@@ -80,10 +34,10 @@ func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string, h
 		return nil, fmt.Errorf("Failed to bind queue: %s", err)
 	}
 
-	log.Printf("Queue bound to exchange, starting consume (consumer tag %q)", c.tag)
-	deliveries, err := c.channel.Consume(
+	log.Printf("Queue bound to exchange, starting consume (consumer tag %q)", ctag)
+	deliveries, err := channel.Consume(
 		queue.Name,
-		c.tag,
+		ctag,
 		false,
 		false,
 		false,
@@ -94,29 +48,20 @@ func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string, h
 		return nil, fmt.Errorf("Failed to start consuming from queue: %s", err)
 	}
 
-	go handle(deliveries, handler, c.done)
+	handlerIsDone := make(chan error)
+	go handle(deliveries, handler, handlerIsDone)
 
-	return c, nil
+	return func() error {
+		log.Printf("Cancelling consumer")
+		err := channel.Cancel(ctag, true)
+		if err != nil {
+			return fmt.Errorf("Failed to cancel consumer: %s", err)
+		}
+		return <-handlerIsDone
+	}, nil
 }
 
-func (c *Consumer) Shutdown() {
-	err := c.channel.Cancel(c.tag, true)
-	if err != nil {
-		log.Printf("Failed to cancel deliveries: %s", err)
-	}
-
-	err = c.conn.Close()
-	if err != nil {
-		log.Printf("Failed to close AMQP connection: %s", err)
-	}
-
-	defer log.Printf("Shutdown completed")
-
-	// Wait for handle() to exit
-	<-c.done
-}
-
-func handle(deliveries <-chan amqp.Delivery, handler func([]byte), done chan error) {
+func handle(deliveries <-chan amqp.Delivery, handler func([]byte), handlerIsDone chan error) {
 	for d := range deliveries {
 		log.Printf(
 			"Got %dB delivery: [%v] %q",
@@ -128,5 +73,5 @@ func handle(deliveries <-chan amqp.Delivery, handler func([]byte), done chan err
 		d.Ack(false)
 	}
 	log.Printf("Deliveries channel closed")
-	done <- nil
+	handlerIsDone <- nil
 }

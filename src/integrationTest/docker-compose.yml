@@ -8,9 +8,11 @@ services:
     environment:
       - MONGODB_HOST=mongodb://mongodb:27017
       - RABBITMQ_HOST=amqp://guest:guest@rabbitmq:5672
-      - RABBITMQ_EXCHANGE=test-exchange
+      - RABBITMQ_INCOMING_EXCHANGE=incoming-exchange
       - RABBITMQ_QUEUE=test-queue
-      - RABBITMQ_BINDING_KEY=test-key
+      - RABBITMQ_BINDING_KEY=simple-binding-key
+      - RABBITMQ_OUTGOING_EXCHANGE=outgoing-exchange
+      - RABBITMQ_ROUTING_KEY=simple-routing-key
     depends_on:
       - mongodb
       - rabbitmq
