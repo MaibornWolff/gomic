@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -13,27 +12,24 @@ import (
 	"net/http"
 )
 
-func handleFindData(mongo *mongo.Client, database string, collection string, writer http.ResponseWriter) {
-	cursor, err := mongo.Database(database).Collection(collection).Find(context.Background(), bson.M{"firstName": bson.M{"$exists": true}})
+func handlePersonsRequest(ctx context.Context, mongo *mongo.Client, database string, collection string, writer http.ResponseWriter) {
+	cursor, err := mongo.Database(database).Collection(collection).Find(ctx, bson.M{})
 	if err != nil {
-		log.Printf("Failed to find data: %s", err)
+		log.Printf("Failed to find documents: %s", err)
 		return
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
-	persons := make([]model.Person, 1)
-	for cursor.Next(context.Background()) {
-		var person model.Person
-		err = cursor.Decode(&person)
-		if err != nil {
-			log.Printf("Failed to decode Person: %s", err)
-		}
-		persons = append(persons, person)
+	persons := make([]model.Person, 0)
+	err = cursor.All(ctx, &persons)
+	if err != nil {
+		log.Printf("Failed to decode documents: %s", err)
+		return
 	}
 	log.Printf("Found %d Persons", len(persons))
 
 	for _, person := range persons {
-		_, err = writer.Write([]byte(fmt.Sprintf("%s %s\n", person.FirstName, person.LastName)))
+		_, err = writer.Write([]byte(person.String() + "\n"))
 		if err != nil {
 			log.Printf("Failed to write response: %s", err)
 			return
@@ -41,22 +37,30 @@ func handleFindData(mongo *mongo.Client, database string, collection string, wri
 	}
 }
 
-func handleIncomingMessage(data []byte, mongo *mongo.Client, database string, collection string, channel *amqp.Channel, exchange string, routingKey string) {
-	log.Printf("Trying to insert incoming message into MongoDB: %s", string(data))
+func handleIncomingMessage(ctx context.Context, mongo *mongo.Client, personData []byte, database string, collection string, channel *amqp.Channel, exchange string, routingKey string) {
+	log.Printf("Trying to insert incoming RabbitMQ message into MongoDB: %s", string(personData))
 
 	var person model.Person
-	err := json.Unmarshal(data, &person)
+	err := json.Unmarshal(personData, &person)
 	if err != nil {
 		log.Printf("Failed to unmarshal JSON to Person: %s", err)
+		return
 	}
 
-	_, err = mongo.Database(database).Collection(collection).InsertOne(context.Background(), person)
+	_, err = mongo.Database(database).Collection(collection).InsertOne(ctx, person)
 	if err != nil {
 		log.Printf("Failed to insert Person into MongoDB: %s", err)
+		return
 	}
 
-	err = rabbitmq.Publish(channel, exchange, routingKey, data, true)
+	upperCasedPerson := person.WithUpperCase()
+	upperCasedPersonData, err := json.Marshal(upperCasedPerson)
 	if err != nil {
-		log.Printf("Failed to publish message: %s", err)
+		log.Printf("Failed to marshal Person in upper case to JSON: %s", err)
+	}
+
+	err = rabbitmq.Publish(channel, exchange, routingKey, upperCasedPersonData)
+	if err != nil {
+		log.Printf("Failed to publish RabbitMQ message: %s", err)
 	}
 }

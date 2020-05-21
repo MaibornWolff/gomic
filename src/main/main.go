@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"maibornwolff.de/gomic/mongodb"
 	"maibornwolff.de/gomic/rabbitmq"
@@ -13,23 +15,30 @@ import (
 
 var (
 	mongodbHost       = getEnv("MONGODB_HOST", "")
-	mongodbDatabase   = getEnv("MONGODB_DATABASE", "db")
-	mongodbCollection = getEnv("MONGODB_COLLECTION", "foo")
+	mongodbDatabase   = getEnv("MONGODB_DATABASE", "")
+	mongodbCollection = getEnv("MONGODB_COLLECTION", "")
 
 	rabbitmqHost                 = getEnv("RABBITMQ_HOST", "")
 	rabbitmqIncomingExchange     = getEnv("RABBITMQ_INCOMING_EXCHANGE", "")
 	rabbitmqIncomingExchangeType = getEnv("RABBITMQ_INCOMING_EXCHANGE_TYPE", "direct")
 	rabbitmqQueue                = getEnv("RABBITMQ_QUEUE", "")
 	rabbitmqBindingKey           = getEnv("RABBITMQ_BINDING_KEY", "")
-	rabbitmqConsumerTag          = getEnv("RABBITMQ_CONSUMER_TAG", "simple-consumer")
+	rabbitmqConsumerTag          = getEnv("RABBITMQ_CONSUMER_TAG", "")
 	rabbitmqOutgoingExchange     = getEnv("RABBITMQ_OUTGOING_EXCHANGE", "")
 	rabbitmqOutgoingExchangeType = getEnv("RABBITMQ_OUTGOING_EXCHANGE_TYPE", "direct")
 	rabbitmqRoutingKey           = getEnv("RABBITMQ_ROUTING_KEY", "")
+
+	httpServerPort = getEnv("HTTP_SERVER_PORT", "8080")
 )
 
 func main() {
-	mongo := mongodb.Connect(mongodbHost)
-	defer mongo.Disconnect(context.Background())
+	ctx := context.Background()
+
+	mongo, err := mongodb.Connect(ctx, mongodbHost)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %s", err)
+	}
+	defer mongo.Disconnect(ctx)
 
 	connection, channel, err := rabbitmq.Connect(rabbitmqHost)
 	if err != nil {
@@ -47,22 +56,29 @@ func main() {
 		log.Fatalf("Failed to declare outgoing exchange: %s", err)
 	}
 
-	cancel, err := rabbitmq.Consume(
+	cancelConsumer, err := rabbitmq.Consume(
 		channel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
 		func(data []byte) {
-			handleIncomingMessage(data, mongo, mongodbDatabase, mongodbCollection, channel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
+			handleIncomingMessage(ctx, mongo, data, mongodbDatabase, mongodbCollection, channel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
 		})
 	if err != nil {
 		log.Fatalf("Failed to consume: %s", err)
 	}
-	defer cancel()
+	defer cancelConsumer()
 
-	http.HandleFunc("/data", func(writer http.ResponseWriter, request *http.Request) {
-		handleFindData(mongo, mongodbDatabase, mongodbCollection, writer)
+	err = rabbitmq.EnablePublishingConfirms(channel)
+	if err != nil {
+		log.Fatalf("Failed to enable publishing confirms: %s", err)
+	}
+
+	http.Handle("/metrics", promhttp.Handler())
+
+	http.HandleFunc("/persons", func(writer http.ResponseWriter, request *http.Request) {
+		handlePersonsRequest(ctx, mongo, mongodbDatabase, mongodbCollection, writer)
 	})
 
 	go func() {
-		err := http.ListenAndServe(":8080", nil)
+		err := http.ListenAndServe(fmt.Sprintf(":%s", httpServerPort), nil)
 		if err != nil {
 			log.Fatalf("Failed to listen and serve: %s", err)
 		}

@@ -7,7 +7,6 @@ import (
 )
 
 func Connect(amqpURI string) (*amqp.Connection, *amqp.Channel, error) {
-	log.Printf("Dialing %q", amqpURI)
 	conn, err := amqp.Dial(amqpURI)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to dial: %s", err)
@@ -17,11 +16,12 @@ func Connect(amqpURI string) (*amqp.Connection, *amqp.Channel, error) {
 		fmt.Printf("Closing: %s", <-conn.NotifyClose(make(chan *amqp.Error)))
 	}()
 
-	log.Printf("Got connection, getting channel")
 	channel, err := conn.Channel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get channel: %s", err)
+		return nil, nil, fmt.Errorf("Failed to open channel: %s", err)
 	}
+
+	log.Printf("Connected to RabbitMQ")
 
 	return conn, channel, nil
 }
