@@ -21,31 +21,27 @@ services:
       - rabbitmq
     restart: on-failure
     networks:
-      - network1
+      - gomic-network
 
   mongodb:
     image: mongo
     ports:
       - "27017:27017"
-    healthcheck:
-      test: ["CMD", "telnet", "mongodb://localhost:27017"]
     volumes:
-      - "mongodata:/data/db"
+      - "gomic-data:/data/db"
     networks:
-      - network1
+      - gomic-network
 
   rabbitmq:
     image: rabbitmq:management
     ports:
       - "5672:5672"
       - "15672:15672"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:15672"]
     networks:
-      - network1
+      - gomic-network
 
 volumes:
-  mongodata:
+  gomic-data:
 
 networks:
-  network1:
+  gomic-network:
