@@ -6,18 +6,19 @@ import (
 	"log"
 )
 
-func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *amqp.Channel, chan *amqp.Error, error) {
-	conn, err := amqp.Dial(amqpURI)
+func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, chan *amqp.Error, *amqp.Channel, error) {
+	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to dial: %s", err)
 	}
 
-	channel, err := conn.Channel()
+	connectionIsClosed := make(chan *amqp.Error)
+	connection.NotifyClose(connectionIsClosed)
+
+	channel, err := connection.Channel()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to open channel: %s", err)
 	}
-
-	log.Printf("Connected to RabbitMQ")
 
 	if enablePublishingConfirms {
 		err = putIntoConfirmMode(channel)
@@ -26,10 +27,9 @@ func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *
 		}
 	}
 
-	errorChannel := make(chan *amqp.Error)
-	conn.NotifyClose(errorChannel)
+	log.Printf("Connected to RabbitMQ")
 
-	return conn, channel, errorChannel, nil
+	return connection, connectionIsClosed, channel, nil
 }
 
 func DeclareSimpleExchange(channel *amqp.Channel, exchange string, exchangeType string) error {

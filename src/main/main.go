@@ -34,17 +34,17 @@ var (
 func main() {
 	ctx := context.Background()
 
-	mongo, err := mongodb.Connect(ctx, mongodbHost)
+	mongoClient, err := mongodb.Connect(ctx, mongodbHost)
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %s", err)
 	}
-	defer mongo.Disconnect(ctx)
+	defer mongoClient.Disconnect(ctx)
 
-	rabbit, rabbitChannel, rabbitErrorChannel, err := rabbitmq.Connect(rabbitmqHost, true)
+	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(rabbitmqHost, true)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
 	}
-	defer rabbit.Close()
+	defer rabbitConnection.Close()
 
 	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, rabbitmqIncomingExchange, rabbitmqIncomingExchangeType)
 	if err != nil {
@@ -59,19 +59,19 @@ func main() {
 	cancelRabbitConsumer, err := rabbitmq.Consume(
 		rabbitChannel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
 		func(data []byte) {
-			handleIncomingMessage(ctx, mongo, data, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
+			handleIncomingMessage(ctx, data, mongoClient, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
 		})
 	if err != nil {
 		log.Fatalf("Failed to consume: %s", err)
 	}
 	defer cancelRabbitConsumer()
 
-	http.Handle("/health", handleHealthRequest(mongo, rabbitErrorChannel))
+	http.Handle("/health", handleHealthRequest(mongoClient, rabbitConnectionIsClosed))
 
 	http.Handle("/metrics", promhttp.Handler())
 
-	http.HandleFunc("/persons", func(writer http.ResponseWriter, request *http.Request) {
-		handlePersonsRequest(ctx, mongo, mongodbDatabase, mongodbCollection, writer)
+	http.HandleFunc("/persons", func(responseWriter http.ResponseWriter, request *http.Request) {
+		handlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, responseWriter)
 	})
 
 	go func() {

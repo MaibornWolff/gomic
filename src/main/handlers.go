@@ -15,13 +15,13 @@ import (
 	"time"
 )
 
-func handleHealthRequest(mongo *mongo.Client, rabbitErrorChannel chan *amqp.Error) http.Handler {
+func handleHealthRequest(mongoClient *mongo.Client, rabbitConnectionIsClosed chan *amqp.Error) http.Handler {
 	return healthcheck.Handler(
 		healthcheck.WithTimeout(5*time.Second),
 		healthcheck.WithChecker(
 			"mongodb", healthcheck.CheckerFunc(
 				func(ctx context.Context) error {
-					return mongo.Ping(ctx, nil)
+					return mongoClient.Ping(ctx, nil)
 				},
 			),
 		),
@@ -29,9 +29,9 @@ func handleHealthRequest(mongo *mongo.Client, rabbitErrorChannel chan *amqp.Erro
 			"rabbitmq", healthcheck.CheckerFunc(
 				func(ctx context.Context) error {
 					select {
-					case errorPointer := <-rabbitErrorChannel:
-						if errorPointer != nil {
-							return *errorPointer
+					case err := <-rabbitConnectionIsClosed:
+						if err != nil {
+							return err
 						}
 						return errors.New("Connection to RabbitMQ is closed")
 					default:
@@ -43,8 +43,8 @@ func handleHealthRequest(mongo *mongo.Client, rabbitErrorChannel chan *amqp.Erro
 	)
 }
 
-func handlePersonsRequest(ctx context.Context, mongo *mongo.Client, database string, collection string, writer http.ResponseWriter) {
-	cursor, err := mongo.Database(database).Collection(collection).Find(ctx, bson.M{})
+func handlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, database string, collection string, responseWriter http.ResponseWriter) {
+	cursor, err := mongoClient.Database(database).Collection(collection).Find(ctx, bson.M{})
 	if err != nil {
 		log.Printf("Failed to find documents: %s", err)
 		return
@@ -60,7 +60,7 @@ func handlePersonsRequest(ctx context.Context, mongo *mongo.Client, database str
 	log.Printf("Found %d Persons", len(persons))
 
 	for _, person := range persons {
-		_, err = writer.Write([]byte(person.String() + "\n"))
+		_, err = responseWriter.Write([]byte(person.String() + "\n"))
 		if err != nil {
 			log.Printf("Failed to write response: %s", err)
 			return
@@ -68,7 +68,7 @@ func handlePersonsRequest(ctx context.Context, mongo *mongo.Client, database str
 	}
 }
 
-func handleIncomingMessage(ctx context.Context, mongo *mongo.Client, personData []byte, database string, collection string, channel *amqp.Channel, exchange string, routingKey string) {
+func handleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
 	log.Printf("Trying to insert incoming RabbitMQ message into MongoDB: %s", string(personData))
 
 	var person model.Person
@@ -78,7 +78,7 @@ func handleIncomingMessage(ctx context.Context, mongo *mongo.Client, personData 
 		return
 	}
 
-	_, err = mongo.Database(database).Collection(collection).InsertOne(ctx, person)
+	_, err = mongoClient.Database(database).Collection(collection).InsertOne(ctx, person)
 	if err != nil {
 		log.Printf("Failed to insert Person into MongoDB: %s", err)
 		return
@@ -90,7 +90,7 @@ func handleIncomingMessage(ctx context.Context, mongo *mongo.Client, personData 
 		log.Printf("Failed to marshal Person in upper case to JSON: %s", err)
 	}
 
-	err = rabbitmq.Publish(channel, exchange, routingKey, upperCasedPersonData)
+	err = rabbitmq.Publish(rabbitChannel, exchange, routingKey, upperCasedPersonData)
 	if err != nil {
 		log.Printf("Failed to publish RabbitMQ message: %s", err)
 	}

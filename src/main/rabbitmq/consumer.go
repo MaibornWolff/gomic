@@ -75,11 +75,11 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, key strin
 }
 
 func handle(deliveries <-chan amqp.Delivery, handler func([]byte), handlerIsDone chan error) {
-	for d := range deliveries {
-		log.Printf("Got %dB delivery: [%v] %q", len(d.Body), d.DeliveryTag, d.Body)
+	for delivery := range deliveries {
+		log.Printf("Got %dB delivery: [%v] %q", len(delivery.Body), delivery.DeliveryTag, delivery.Body)
 
-		handler(d.Body)
-		d.Ack(false)
+		handler(delivery.Body)
+		delivery.Ack(false)
 
 		incomingMessages.Inc()
 	}
