@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/etherlabsio/healthcheck"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -10,7 +12,31 @@ import (
 	"maibornwolff.de/gomic/model"
 	"maibornwolff.de/gomic/rabbitmq"
 	"net/http"
+	"time"
 )
+
+func handleHealth(mongo *mongo.Client, rabbit *amqp.Connection) http.Handler {
+	return healthcheck.Handler(
+		healthcheck.WithTimeout(5*time.Second),
+		healthcheck.WithChecker(
+			"mongodb", healthcheck.CheckerFunc(
+				func(ctx context.Context) error {
+					return mongo.Ping(ctx, nil)
+				},
+			),
+		),
+		healthcheck.WithChecker(
+			"rabbitmq", healthcheck.CheckerFunc(
+				func(ctx context.Context) error {
+					if rabbit.IsClosed() {
+						return errors.New("Connection to RabbitMQ is closed")
+					}
+					return nil
+				},
+			),
+		),
+	)
+}
 
 func handlePersonsRequest(ctx context.Context, mongo *mongo.Client, database string, collection string, writer http.ResponseWriter) {
 	cursor, err := mongo.Database(database).Collection(collection).Find(ctx, bson.M{})

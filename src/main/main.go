@@ -40,11 +40,11 @@ func main() {
 	}
 	defer mongo.Disconnect(ctx)
 
-	connection, channel, err := rabbitmq.Connect(rabbitmqHost, true)
+	rabbit, channel, err := rabbitmq.Connect(rabbitmqHost, true)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
 	}
-	defer connection.Close()
+	defer rabbit.Close()
 
 	err = rabbitmq.DeclareSimpleExchange(channel, rabbitmqIncomingExchange, rabbitmqIncomingExchangeType)
 	if err != nil {
@@ -65,6 +65,8 @@ func main() {
 		log.Fatalf("Failed to consume: %s", err)
 	}
 	defer cancelConsumer()
+
+	http.Handle("/health", handleHealth(mongo, rabbit))
 
 	http.Handle("/metrics", promhttp.Handler())
 
