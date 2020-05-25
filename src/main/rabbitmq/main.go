@@ -6,10 +6,10 @@ import (
 	"log"
 )
 
-func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *amqp.Channel, error) {
+func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *amqp.Channel, chan *amqp.Error, error) {
 	conn, err := amqp.Dial(amqpURI)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to dial: %s", err)
+		return nil, nil, nil, fmt.Errorf("Failed to dial: %s", err)
 	}
 
 	go func() {
@@ -18,7 +18,7 @@ func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *
 
 	channel, err := conn.Channel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to open channel: %s", err)
+		return nil, nil, nil, fmt.Errorf("Failed to open channel: %s", err)
 	}
 
 	log.Printf("Connected to RabbitMQ")
@@ -26,11 +26,14 @@ func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *
 	if enablePublishingConfirms {
 		err = putIntoConfirmMode(channel)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to enable publishing confirms: %s", err)
+			return nil, nil, nil, fmt.Errorf("Failed to enable publishing confirms: %s", err)
 		}
 	}
 
-	return conn, channel, nil
+	errorChannel := make(chan *amqp.Error)
+	conn.NotifyClose(errorChannel)
+
+	return conn, channel, errorChannel, nil
 }
 
 func DeclareSimpleExchange(channel *amqp.Channel, exchange string, exchangeType string) error {

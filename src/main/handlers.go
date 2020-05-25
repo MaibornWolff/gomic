@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func handleHealth(mongo *mongo.Client, rabbit *amqp.Connection) http.Handler {
+func handleHealthRequest(mongo *mongo.Client, rabbitErrorChannel chan *amqp.Error) http.Handler {
 	return healthcheck.Handler(
 		healthcheck.WithTimeout(5*time.Second),
 		healthcheck.WithChecker(
@@ -28,8 +28,13 @@ func handleHealth(mongo *mongo.Client, rabbit *amqp.Connection) http.Handler {
 		healthcheck.WithChecker(
 			"rabbitmq", healthcheck.CheckerFunc(
 				func(ctx context.Context) error {
-					if rabbit.IsClosed() {
+					select {
+					case errorPointer := <-rabbitErrorChannel:
+						if errorPointer != nil {
+							return *errorPointer
+						}
 						return errors.New("Connection to RabbitMQ is closed")
+					default:
 					}
 					return nil
 				},

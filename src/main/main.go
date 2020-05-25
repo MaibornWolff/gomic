@@ -40,33 +40,33 @@ func main() {
 	}
 	defer mongo.Disconnect(ctx)
 
-	rabbit, channel, err := rabbitmq.Connect(rabbitmqHost, true)
+	rabbit, rabbitChannel, rabbitErrorChannel, err := rabbitmq.Connect(rabbitmqHost, true)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
 	}
 	defer rabbit.Close()
 
-	err = rabbitmq.DeclareSimpleExchange(channel, rabbitmqIncomingExchange, rabbitmqIncomingExchangeType)
+	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, rabbitmqIncomingExchange, rabbitmqIncomingExchangeType)
 	if err != nil {
 		log.Fatalf("Failed to declare incoming exchange: %s", err)
 	}
 
-	err = rabbitmq.DeclareSimpleExchange(channel, rabbitmqOutgoingExchange, rabbitmqOutgoingExchangeType)
+	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, rabbitmqOutgoingExchange, rabbitmqOutgoingExchangeType)
 	if err != nil {
 		log.Fatalf("Failed to declare outgoing exchange: %s", err)
 	}
 
-	cancelConsumer, err := rabbitmq.Consume(
-		channel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
+	cancelRabbitConsumer, err := rabbitmq.Consume(
+		rabbitChannel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
 		func(data []byte) {
-			handleIncomingMessage(ctx, mongo, data, mongodbDatabase, mongodbCollection, channel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
+			handleIncomingMessage(ctx, mongo, data, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
 		})
 	if err != nil {
 		log.Fatalf("Failed to consume: %s", err)
 	}
-	defer cancelConsumer()
+	defer cancelRabbitConsumer()
 
-	http.Handle("/health", handleHealth(mongo, rabbit))
+	http.Handle("/health", handleHealthRequest(mongo, rabbitErrorChannel))
 
 	http.Handle("/metrics", promhttp.Handler())
 
