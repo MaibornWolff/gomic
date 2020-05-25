@@ -1,6 +1,4 @@
 FROM golang:alpine as builder
-RUN apk update
-RUN apk add gcc g++
 RUN mkdir /build
 WORKDIR /build
 COPY go.mod go.sum ./
