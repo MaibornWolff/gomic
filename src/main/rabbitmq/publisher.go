@@ -28,8 +28,8 @@ func Publish(channel *amqp.Channel, exchange string, routingKey string, data []b
 	return nil
 }
 
-func EnablePublishingConfirms(channel *amqp.Channel) error {
-	log.Printf("Enabling publishing confirms")
+func putIntoConfirmMode(channel *amqp.Channel) error {
+	log.Printf("Putting channel into confirm mode")
 
 	err := channel.Confirm(false)
 	if err != nil {

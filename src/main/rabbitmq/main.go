@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func Connect(amqpURI string) (*amqp.Connection, *amqp.Channel, error) {
+func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, *amqp.Channel, error) {
 	conn, err := amqp.Dial(amqpURI)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to dial: %s", err)
@@ -22,6 +22,13 @@ func Connect(amqpURI string) (*amqp.Connection, *amqp.Channel, error) {
 	}
 
 	log.Printf("Connected to RabbitMQ")
+
+	if enablePublishingConfirms {
+		err = putIntoConfirmMode(channel)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Failed to enable publishing confirms: %s", err)
+		}
+	}
 
 	return conn, channel, nil
 }

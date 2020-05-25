@@ -40,7 +40,7 @@ func main() {
 	}
 	defer mongo.Disconnect(ctx)
 
-	connection, channel, err := rabbitmq.Connect(rabbitmqHost)
+	connection, channel, err := rabbitmq.Connect(rabbitmqHost, true)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
 	}
@@ -65,11 +65,6 @@ func main() {
 		log.Fatalf("Failed to consume: %s", err)
 	}
 	defer cancelConsumer()
-
-	err = rabbitmq.EnablePublishingConfirms(channel)
-	if err != nil {
-		log.Fatalf("Failed to enable publishing confirms: %s", err)
-	}
 
 	http.Handle("/metrics", promhttp.Handler())
 
