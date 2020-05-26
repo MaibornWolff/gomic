@@ -1,15 +1,17 @@
+# gomic
+
 ![Gopher](resources/gomic_gopher_small.png)
 
-### Aim
-Gomic is a minimal microservice skeleton in Golang, including support for
+## Aim
+gomic is a minimal microservice skeleton in Golang, including support for
 * MongoDB
 * RabbitMQ
 * Prometheus
 * health checks
 * custom HTTP endpoints
 
-### Behavior
+## Behavior
 The sample business logic consumes a JSON document from a RabbitMQ queue, stores it in a MongoDB database and finally forwards it in upper case to a RabbitMQ exchange.
 
-### Usage
+## Usage
 `make build start`
