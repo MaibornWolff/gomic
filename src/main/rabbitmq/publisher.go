@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func Publish(channel *amqp.Channel, exchange string, routingKey string, data []byte) error {
+func Publish(channel *amqp.Channel, exchange string, routingKey string, data []byte, contentType string) error {
 	err := channel.Publish(
 		exchange,
 		routingKey,
@@ -14,7 +14,7 @@ func Publish(channel *amqp.Channel, exchange string, routingKey string, data []b
 		false,
 		amqp.Publishing{
 			Headers:         amqp.Table{},
-			ContentType:     "text/plain",
+			ContentType:     contentType,
 			ContentEncoding: "",
 			Body:            data,
 			DeliveryMode:    amqp.Transient,

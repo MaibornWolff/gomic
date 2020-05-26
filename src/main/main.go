@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/vrischmann/envconfig"
 	"log"
 	"maibornwolff.de/gomic/application"
 	"maibornwolff.de/gomic/mongodb"
@@ -14,53 +15,40 @@ import (
 	"syscall"
 )
 
-var (
-	mongodbHost       = getEnv("MONGODB_HOST", "")
-	mongodbDatabase   = getEnv("MONGODB_DATABASE", "")
-	mongodbCollection = getEnv("MONGODB_COLLECTION", "")
-
-	rabbitmqHost                 = getEnv("RABBITMQ_HOST", "")
-	rabbitmqIncomingExchange     = getEnv("RABBITMQ_INCOMING_EXCHANGE", "")
-	rabbitmqIncomingExchangeType = getEnv("RABBITMQ_INCOMING_EXCHANGE_TYPE", "direct")
-	rabbitmqQueue                = getEnv("RABBITMQ_QUEUE", "")
-	rabbitmqBindingKey           = getEnv("RABBITMQ_BINDING_KEY", "")
-	rabbitmqConsumerTag          = getEnv("RABBITMQ_CONSUMER_TAG", "")
-	rabbitmqOutgoingExchange     = getEnv("RABBITMQ_OUTGOING_EXCHANGE", "")
-	rabbitmqOutgoingExchangeType = getEnv("RABBITMQ_OUTGOING_EXCHANGE_TYPE", "direct")
-	rabbitmqRoutingKey           = getEnv("RABBITMQ_ROUTING_KEY", "")
-
-	httpServerPort = getEnv("HTTP_SERVER_PORT", "8080")
-)
-
 func main() {
+	err := envconfig.Init(&config)
+	if err != nil {
+		log.Fatalf("Failed to read config: %s", err)
+	}
+
 	ctx := context.Background()
 
-	mongoClient, err := mongodb.Connect(ctx, mongodbHost)
+	mongoClient, err := mongodb.Connect(ctx, config.Mongodb.Host)
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %s", err)
 	}
 	defer mongoClient.Disconnect(ctx)
 
-	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(rabbitmqHost, true)
+	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(config.Rabbitmq.Host, true)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
 	}
 	defer rabbitConnection.Close()
 
-	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, rabbitmqIncomingExchange, rabbitmqIncomingExchangeType)
+	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.IncomingExchangeType)
 	if err != nil {
 		log.Fatalf("Failed to declare incoming exchange: %s", err)
 	}
 
-	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, rabbitmqOutgoingExchange, rabbitmqOutgoingExchangeType)
+	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.OutgoingExchangeType)
 	if err != nil {
 		log.Fatalf("Failed to declare outgoing exchange: %s", err)
 	}
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
-		rabbitChannel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
+		rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
 		func(data []byte) {
-			application.HandleIncomingMessage(ctx, data, mongoClient, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
+			application.HandleIncomingMessage(ctx, data, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
 		log.Fatalf("Failed to consume: %s", err)
@@ -74,11 +62,11 @@ func main() {
 	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitConnectionIsClosed)))
 
 	router.GET("/persons", func(ctx *gin.Context) {
-		application.HandlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection)
+		application.HandlePersonsRequest(ctx, mongoClient, config.Mongodb.Database, config.Mongodb.Collection)
 	})
 
 	go func() {
-		err := router.Run(fmt.Sprintf(":%s", httpServerPort))
+		err := router.Run(fmt.Sprintf(":%d", config.HTTPServer.Port))
 		if err != nil {
 			log.Fatalf("Failed to listen and serve: %s", err)
 		}

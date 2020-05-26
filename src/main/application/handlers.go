@@ -53,7 +53,7 @@ func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *
 		log.Printf("Failed to marshal Person in upper case to JSON: %s", err)
 	}
 
-	err = rabbitmq.Publish(rabbitChannel, exchange, routingKey, upperCasedPersonData)
+	err = rabbitmq.Publish(rabbitChannel, exchange, routingKey, upperCasedPersonData, "application/json")
 	if err != nil {
 		log.Printf("Failed to publish RabbitMQ message: %s", err)
 	}
