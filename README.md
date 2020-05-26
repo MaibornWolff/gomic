@@ -1,6 +1,6 @@
 # gomic
 
-![Gopher](resources/gomic_gopher_small.png)
+[![Gopher](resources/gomic_gopher_small.png)](resources/gomic_gopher.png)
 
 gomic is a minimal microservice skeleton in Golang, including support for
 * MongoDB
