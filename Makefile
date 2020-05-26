@@ -3,7 +3,7 @@ PROJECT = gomic
 build:
 	cd src/main && docker build -t $(PROJECT):latest .
 
-start: build
+start:
 	cd src/integration && docker-compose up
 
 stop:
