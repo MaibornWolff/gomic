@@ -74,7 +74,7 @@ func main() {
 	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitConnectionIsClosed)))
 
 	router.GET("/persons", func(ctx *gin.Context) {
-		application.HandlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, ctx.Writer)
+		application.HandlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection)
 	})
 
 	go func() {

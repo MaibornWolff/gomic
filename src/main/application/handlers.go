@@ -3,16 +3,16 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"maibornwolff.de/gomic/model"
 	"maibornwolff.de/gomic/rabbitmq"
-	"net/http"
 )
 
-func HandlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, database string, collection string, responseWriter http.ResponseWriter) {
+func HandlePersonsRequest(ctx *gin.Context, mongoClient *mongo.Client, database string, collection string) {
 	cursor, err := mongoClient.Database(database).Collection(collection).Find(ctx, bson.M{})
 	if err != nil {
 		log.Printf("Failed to find documents: %s", err)
@@ -28,13 +28,7 @@ func HandlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, databa
 	}
 	log.Printf("Found %d Persons", len(persons))
 
-	for _, person := range persons {
-		_, err = responseWriter.Write([]byte(person.String() + "\n"))
-		if err != nil {
-			log.Printf("Failed to write response: %s", err)
-			return
-		}
-	}
+	ctx.JSON(200, persons)
 }
 
 func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
