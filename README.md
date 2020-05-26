@@ -2,7 +2,6 @@
 
 ![Gopher](resources/gomic_gopher_small.png)
 
-## Aim
 gomic is a minimal microservice skeleton in Golang, including support for
 * MongoDB
 * RabbitMQ
