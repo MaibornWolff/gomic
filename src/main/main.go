@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
+	"maibornwolff.de/gomic/application"
 	"maibornwolff.de/gomic/mongodb"
 	"maibornwolff.de/gomic/rabbitmq"
 	"os"
@@ -59,7 +60,7 @@ func main() {
 	cancelRabbitConsumer, err := rabbitmq.Consume(
 		rabbitChannel, rabbitmqIncomingExchange, rabbitmqQueue, rabbitmqBindingKey, rabbitmqConsumerTag,
 		func(data []byte) {
-			handleIncomingMessage(ctx, data, mongoClient, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
+			application.HandleIncomingMessage(ctx, data, mongoClient, mongodbDatabase, mongodbCollection, rabbitChannel, rabbitmqOutgoingExchange, rabbitmqRoutingKey)
 		})
 	if err != nil {
 		log.Fatalf("Failed to consume: %s", err)
@@ -73,7 +74,7 @@ func main() {
 	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitConnectionIsClosed)))
 
 	router.GET("/persons", func(ctx *gin.Context) {
-		handlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, ctx.Writer)
+		application.HandlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, ctx.Writer)
 	})
 
 	go func() {

@@ -1,10 +1,8 @@
-package main
+package application
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"github.com/etherlabsio/healthcheck"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,38 +10,9 @@ import (
 	"maibornwolff.de/gomic/model"
 	"maibornwolff.de/gomic/rabbitmq"
 	"net/http"
-	"time"
 )
 
-func handleHealthRequest(mongoClient *mongo.Client, rabbitConnectionIsClosed chan *amqp.Error) http.Handler {
-	return healthcheck.Handler(
-		healthcheck.WithTimeout(5*time.Second),
-		healthcheck.WithChecker(
-			"mongodb", healthcheck.CheckerFunc(
-				func(ctx context.Context) error {
-					return mongoClient.Ping(ctx, nil)
-				},
-			),
-		),
-		healthcheck.WithChecker(
-			"rabbitmq", healthcheck.CheckerFunc(
-				func(ctx context.Context) error {
-					select {
-					case err := <-rabbitConnectionIsClosed:
-						if err != nil {
-							return err
-						}
-						return errors.New("Connection to RabbitMQ is closed")
-					default:
-					}
-					return nil
-				},
-			),
-		),
-	)
-}
-
-func handlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, database string, collection string, responseWriter http.ResponseWriter) {
+func HandlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, database string, collection string, responseWriter http.ResponseWriter) {
 	cursor, err := mongoClient.Database(database).Collection(collection).Find(ctx, bson.M{})
 	if err != nil {
 		log.Printf("Failed to find documents: %s", err)
@@ -68,7 +37,7 @@ func handlePersonsRequest(ctx context.Context, mongoClient *mongo.Client, databa
 	}
 }
 
-func handleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
+func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
 	log.Printf("Trying to insert incoming RabbitMQ message into MongoDB: %s", string(personData))
 
 	var person model.Person
