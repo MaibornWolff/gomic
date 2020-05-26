@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"maibornwolff.de/gomic/mongodb"
 	"maibornwolff.de/gomic/rabbitmq"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -66,16 +66,18 @@ func main() {
 	}
 	defer cancelRabbitConsumer()
 
-	http.Handle("/health", handleHealthRequest(mongoClient, rabbitConnectionIsClosed))
+	router := gin.Default()
 
-	http.Handle("/metrics", promhttp.Handler())
+	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitConnectionIsClosed)))
 
-	http.HandleFunc("/persons", func(responseWriter http.ResponseWriter, request *http.Request) {
-		handlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, responseWriter)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	router.GET("/persons", func(ctx *gin.Context) {
+		handlePersonsRequest(ctx, mongoClient, mongodbDatabase, mongodbCollection, ctx.Writer)
 	})
 
 	go func() {
-		err := http.ListenAndServe(fmt.Sprintf(":%s", httpServerPort), nil)
+		err := router.Run(fmt.Sprintf(":%s", httpServerPort))
 		if err != nil {
 			log.Fatalf("Failed to listen and serve: %s", err)
 		}

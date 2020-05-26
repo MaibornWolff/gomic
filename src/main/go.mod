@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/etherlabsio/healthcheck v0.0.0-20191224061800-dd3d2fd8c3f6
+	github.com/gin-gonic/gin v1.6.3
 	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
