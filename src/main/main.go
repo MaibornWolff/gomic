@@ -5,44 +5,53 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/vrischmann/envconfig"
-	"log"
 	"maibornwolff.de/gomic/application"
 	"maibornwolff.de/gomic/mongodb"
 	"maibornwolff.de/gomic/rabbitmq"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
 func main() {
 	err := envconfig.Init(&config)
 	if err != nil {
-		log.Fatalf("Failed to read config: %s", err)
+		log.Fatal().Err(err).Msg("Failed to read config")
 	}
+
+	logLevel, err := zerolog.ParseLevel(strings.ToLower(config.LogLevel))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to parse log level")
+	}
+
+	zerolog.SetGlobalLevel(logLevel)
 
 	ctx := context.Background()
 
 	mongoClient, err := mongodb.Connect(ctx, config.Mongodb.Host)
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %s", err)
+		log.Fatal().Err(err).Msg("Failed to connect to MongoDB")
 	}
 	defer mongoClient.Disconnect(ctx)
 
 	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(config.Rabbitmq.Host, true)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
+		log.Fatal().Err(err).Msg("Failed to connect to RabbitMQ")
 	}
 	defer rabbitConnection.Close()
 
 	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.IncomingExchangeType)
 	if err != nil {
-		log.Fatalf("Failed to declare incoming exchange: %s", err)
+		log.Fatal().Err(err).Msg("Failed to declare incoming exchange")
 	}
 
 	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.OutgoingExchangeType)
 	if err != nil {
-		log.Fatalf("Failed to declare outgoing exchange: %s", err)
+		log.Fatal().Err(err).Msg("Failed to declare outgoing exchange")
 	}
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
@@ -51,11 +60,11 @@ func main() {
 			application.HandleIncomingMessage(ctx, data, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
-		log.Fatalf("Failed to consume: %s", err)
+		log.Fatal().Err(err).Msg("Failed to consume")
 	}
 	defer cancelRabbitConsumer()
 
-	router := gin.Default()
+	router := createHTTPRouter(logLevel)
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
@@ -68,12 +77,12 @@ func main() {
 	go func() {
 		err := router.Run(fmt.Sprintf(":%d", config.HTTPServer.Port))
 		if err != nil {
-			log.Fatalf("Failed to listen and serve: %s", err)
+			log.Fatal().Err(err).Msg("Failed to listen and serve")
 		}
 	}()
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 	<-shutdown
-	log.Printf("Received signal to shutdown")
+	log.Info().Msg("Received signal to shutdown")
 }

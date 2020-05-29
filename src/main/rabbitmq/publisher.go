@@ -2,8 +2,8 @@ package rabbitmq
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 func Publish(channel *amqp.Channel, exchange string, routingKey string, data []byte, contentType string) error {
@@ -29,7 +29,7 @@ func Publish(channel *amqp.Channel, exchange string, routingKey string, data []b
 }
 
 func putIntoConfirmMode(channel *amqp.Channel) error {
-	log.Printf("Putting channel into confirm mode")
+	log.Info().Msg("Putting channel into confirm mode")
 
 	err := channel.Confirm(false)
 	if err != nil {
@@ -43,13 +43,13 @@ func putIntoConfirmMode(channel *amqp.Channel) error {
 }
 
 func handleConfirmations(confirms <-chan amqp.Confirmation) {
-	log.Printf("Waiting for confirms")
+	log.Info().Msg("Waiting for confirms")
 
 	for confirm := range confirms {
 		if confirm.Ack {
-			log.Printf("Confirmed delivery (delivery tag %d)", confirm.DeliveryTag)
+			log.Info().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Confirmed delivery")
 		} else {
-			log.Printf("Failed to deliver (delivery tag %d)", confirm.DeliveryTag)
+			log.Info().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Failed to deliver")
 		}
 	}
 }

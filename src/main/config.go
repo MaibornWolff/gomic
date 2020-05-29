@@ -20,4 +20,5 @@ var config struct {
 	HTTPServer struct {
 		Port int `envconfig:"default=8080"`
 	}
+	LogLevel string `envconfig:"default=info"`
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/rs/zerolog/log"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 var (
@@ -15,7 +15,7 @@ var (
 	})
 )
 
-func Consume(channel *amqp.Channel, exchange string, queueName string, key string, consumerTag string, handler func([]byte)) (func() error, error) {
+func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKey string, consumerTag string, handler func([]byte)) (func() error, error) {
 	queue, err := channel.QueueDeclare(
 		queueName,
 		true,
@@ -28,12 +28,17 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, key strin
 		return nil, fmt.Errorf("Failed to declare queue: %s", err)
 	}
 
-	log.Printf("Declared queue (%q, %d messages, %d consumers), binding to exchange (%q, key %q)",
-		queue.Name, queue.Messages, queue.Consumers, exchange, key)
+	log.Info().
+		Str("queue", queue.Name).
+		Int("messageCount", queue.Messages).
+		Int("consumerCount", queue.Consumers).
+		Str("exchange", exchange).
+		Str("bindingKey", bindingKey).
+		Msg("Declared queue, binding it to exchange")
 
 	err = channel.QueueBind(
 		queue.Name,
-		key,
+		bindingKey,
 		exchange,
 		false,
 		nil,
@@ -42,7 +47,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, key strin
 		return nil, fmt.Errorf("Failed to bind queue: %s", err)
 	}
 
-	log.Printf("Queue bound to exchange, starting to consume from queue (consumer tag %q)", consumerTag)
+	log.Info().Str("consumerTag", consumerTag).Msg("Queue bound to exchange, starting to consume from queue")
 
 	deliveries, err := channel.Consume(
 		queue.Name,
@@ -61,7 +66,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, key strin
 	go handle(deliveries, handler, handlerIsDone)
 
 	cancelConsumer := func() error {
-		log.Printf("Cancelling consumer")
+		log.Info().Msg("Cancelling consumer")
 
 		err := channel.Cancel(consumerTag, true)
 		if err != nil {
@@ -76,7 +81,10 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, key strin
 
 func handle(deliveries <-chan amqp.Delivery, handler func([]byte), handlerIsDone chan error) {
 	for delivery := range deliveries {
-		log.Printf("Got %dB delivery: [%v] %q", len(delivery.Body), delivery.DeliveryTag, delivery.Body)
+		log.Info().
+			Uint64("deliveryTag", delivery.DeliveryTag).
+			Bytes("deliveryBody", delivery.Body).
+			Msgf("Got %dB delivery", len(delivery.Body))
 
 		handler(delivery.Body)
 		delivery.Ack(false)
@@ -84,6 +92,6 @@ func handle(deliveries <-chan amqp.Delivery, handler func([]byte), handlerIsDone
 		incomingMessages.Inc()
 	}
 
-	log.Printf("Deliveries channel closed")
+	log.Info().Msg("Deliveries channel closed")
 	handlerIsDone <- nil
 }

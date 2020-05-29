@@ -3,9 +3,9 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 )
 
 func Connect(ctx context.Context, mongodbHost string) (*mongo.Client, error) {
@@ -24,7 +24,7 @@ func Connect(ctx context.Context, mongodbHost string) (*mongo.Client, error) {
 		return nil, fmt.Errorf("Failed to ping MongoDB: %s", err)
 	}
 
-	log.Printf("Connected to MongoDB")
+	log.Info().Msg("Connected to MongoDB")
 
 	return client, nil
 }

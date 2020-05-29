@@ -2,8 +2,8 @@ package rabbitmq
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"github.com/streadway/amqp"
-	"log"
 )
 
 func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, chan *amqp.Error, *amqp.Channel, error) {
@@ -27,7 +27,7 @@ func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, c
 		}
 	}
 
-	log.Printf("Connected to RabbitMQ")
+	log.Info().Msg("Connected to RabbitMQ")
 
 	return connection, connectionIsClosed, channel, nil
 }
