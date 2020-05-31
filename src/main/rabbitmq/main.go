@@ -6,7 +6,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, chan *amqp.Error, *amqp.Channel, error) {
+func Connect(amqpURI string, publisherConfirmHandler func(amqp.Confirmation)) (*amqp.Connection, chan *amqp.Error, *amqp.Channel, error) {
 	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to dial: %s", err)
@@ -20,10 +20,10 @@ func Connect(amqpURI string, enablePublishingConfirms bool) (*amqp.Connection, c
 		return nil, nil, nil, fmt.Errorf("Failed to open channel: %s", err)
 	}
 
-	if enablePublishingConfirms {
-		err = putIntoConfirmMode(channel)
+	if publisherConfirmHandler != nil {
+		err = enablePublisherConfirms(channel, publisherConfirmHandler)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Failed to enable publishing confirms: %s", err)
+			return nil, nil, nil, fmt.Errorf("Failed to enable publisher confirms: %s", err)
 		}
 	}
 

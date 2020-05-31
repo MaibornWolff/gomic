@@ -28,28 +28,32 @@ func Publish(channel *amqp.Channel, exchange string, routingKey string, data []b
 	return nil
 }
 
-func putIntoConfirmMode(channel *amqp.Channel) error {
-	log.Info().Msg("Putting channel into confirm mode")
+func enablePublisherConfirms(channel *amqp.Channel, confirmHandler func(amqp.Confirmation)) error {
+	log.Info().Msg("Enabling publisher confirms")
 
 	err := channel.Confirm(false)
 	if err != nil {
-		return fmt.Errorf("Failed to put channel into confirm mode: %s", err)
+		return fmt.Errorf("Failed to enable publisher confirms: %s", err)
 	}
 
 	confirms := channel.NotifyPublish(make(chan amqp.Confirmation, 1))
-	go handleConfirmations(confirms)
+	go processConfirms(confirms, confirmHandler)
 
 	return nil
 }
 
-func handleConfirmations(confirms <-chan amqp.Confirmation) {
-	log.Info().Msg("Waiting for confirms")
+func processConfirms(confirms <-chan amqp.Confirmation, confirmHandler func(amqp.Confirmation)) {
+	log.Info().Msg("Ready to process publisher confirms")
 
 	for confirm := range confirms {
-		if confirm.Ack {
-			log.Info().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Confirmed delivery")
-		} else {
-			log.Info().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Failed to deliver")
-		}
+		confirmHandler(confirm)
+	}
+}
+
+func SimplePublisherConfirmHandler(confirm amqp.Confirmation) {
+	if confirm.Ack {
+		log.Info().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Confirmed delivery")
+	} else {
+		log.Error().Uint64("deliveryTag", confirm.DeliveryTag).Msg("Failed to deliver")
 	}
 }

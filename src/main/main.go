@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/streadway/amqp"
 	"github.com/vrischmann/envconfig"
 	"maibornwolff.de/gomic/application"
 	"maibornwolff.de/gomic/mongodb"
@@ -38,7 +39,7 @@ func main() {
 	}
 	defer mongoClient.Disconnect(ctx)
 
-	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(config.Rabbitmq.Host, true)
+	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(config.Rabbitmq.Host, rabbitmq.SimplePublisherConfirmHandler)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to RabbitMQ")
 	}
@@ -56,8 +57,8 @@ func main() {
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
 		rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
-		func(data []byte) {
-			application.HandleIncomingMessage(ctx, data, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
+		func(delivery amqp.Delivery) {
+			application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to consume")

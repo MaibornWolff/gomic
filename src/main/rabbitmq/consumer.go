@@ -15,7 +15,7 @@ var (
 	})
 )
 
-func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKey string, consumerTag string, handler func([]byte)) (func() error, error) {
+func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKey string, consumerTag string, deliveryHandler func(amqp.Delivery)) (func() error, error) {
 	queue, err := channel.QueueDeclare(
 		queueName,
 		true,
@@ -62,8 +62,8 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 		return nil, fmt.Errorf("Failed to start to consume from queue: %s", err)
 	}
 
-	handlerIsDone := make(chan error)
-	go handle(deliveries, handler, handlerIsDone)
+	processingIsDone := make(chan error)
+	go processDeliveries(deliveries, deliveryHandler, processingIsDone)
 
 	cancelConsumer := func() error {
 		log.Info().Msg("Cancelling consumer")
@@ -73,25 +73,25 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 			return fmt.Errorf("Failed to cancel consumer: %s", err)
 		}
 
-		return <-handlerIsDone
+		return <-processingIsDone
 	}
 
 	return cancelConsumer, nil
 }
 
-func handle(deliveries <-chan amqp.Delivery, handler func([]byte), handlerIsDone chan error) {
+func processDeliveries(deliveries <-chan amqp.Delivery, deliveryHandler func(amqp.Delivery), processingIsDone chan error) {
 	for delivery := range deliveries {
 		log.Info().
 			Uint64("deliveryTag", delivery.DeliveryTag).
 			Bytes("deliveryBody", delivery.Body).
 			Msgf("Got %dB delivery", len(delivery.Body))
 
-		handler(delivery.Body)
+		deliveryHandler(delivery)
 		delivery.Ack(false)
 
 		incomingMessages.Inc()
 	}
 
 	log.Info().Msg("Deliveries channel closed")
-	handlerIsDone <- nil
+	processingIsDone <- nil
 }

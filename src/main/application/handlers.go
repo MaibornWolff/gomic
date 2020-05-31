@@ -32,7 +32,7 @@ func HandlePersonsRequest(ctx *gin.Context, mongoClient *mongo.Client, database 
 }
 
 func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
-	log.Info().Bytes("personData", personData).Msg("Inserting incoming RabbitMQ message into MongoDB")
+	log.Info().Bytes("personData", personData).Msg("Handle incoming RabbitMQ message")
 
 	var person model.Person
 	err := json.Unmarshal(personData, &person)
