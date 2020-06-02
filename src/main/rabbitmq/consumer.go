@@ -25,7 +25,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to declare queue: %s", err)
+		return nil, fmt.Errorf("Failed to declare queue: %w", err)
 	}
 
 	log.Info().
@@ -44,7 +44,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to bind queue: %s", err)
+		return nil, fmt.Errorf("Failed to bind queue: %w", err)
 	}
 
 	log.Info().Str("consumerTag", consumerTag).Msg("Queue bound to exchange, starting to consume from queue")
@@ -59,7 +59,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to start to consume from queue: %s", err)
+		return nil, fmt.Errorf("Failed to start to consume from queue: %w", err)
 	}
 
 	processingIsDone := make(chan error)
@@ -70,7 +70,7 @@ func Consume(channel *amqp.Channel, exchange string, queueName string, bindingKe
 
 		err := channel.Cancel(consumerTag, true)
 		if err != nil {
-			return fmt.Errorf("Failed to cancel consumer: %s", err)
+			return fmt.Errorf("Failed to cancel consumer: %w", err)
 		}
 
 		return <-processingIsDone

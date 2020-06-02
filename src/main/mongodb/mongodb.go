@@ -11,17 +11,17 @@ import (
 func Connect(ctx context.Context, mongodbHost string) (*mongo.Client, error) {
 	client, err := mongo.NewClient(options.Client().ApplyURI(mongodbHost))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create client: %s", err)
+		return nil, fmt.Errorf("Failed to create client: %w", err)
 	}
 
 	err = client.Connect(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize client: %s", err)
+		return nil, fmt.Errorf("Failed to initialize client: %w", err)
 	}
 
 	err = client.Ping(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to ping MongoDB: %s", err)
+		return nil, fmt.Errorf("Failed to ping MongoDB: %w", err)
 	}
 
 	log.Info().Msg("Connected to MongoDB")

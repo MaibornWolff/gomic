@@ -16,14 +16,14 @@ type Client struct {
 func Connect(amqpURI string, publisherConfirmHandler func(amqp.Confirmation)) (*Client, error) {
 	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to dial: %s", err)
+		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 
 	connectionIsClosed := connection.NotifyClose(make(chan *amqp.Error, 1))
 
 	channel, err := connection.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open channel: %s", err)
+		return nil, fmt.Errorf("Failed to open channel: %w", err)
 	}
 
 	channelIsClosed := channel.NotifyClose(make(chan *amqp.Error, 1))
@@ -31,7 +31,7 @@ func Connect(amqpURI string, publisherConfirmHandler func(amqp.Confirmation)) (*
 	if publisherConfirmHandler != nil {
 		err = enablePublisherConfirms(channel, publisherConfirmHandler)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to enable publisher confirms: %s", err)
+			return nil, fmt.Errorf("Failed to enable publisher confirms: %w", err)
 		}
 	}
 
@@ -73,7 +73,7 @@ func (client *Client) DeclareSimpleExchange(exchange string, exchangeType string
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to declare exchange: %s", err)
+		return fmt.Errorf("Failed to declare exchange: %w", err)
 	}
 
 	return nil

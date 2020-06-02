@@ -22,7 +22,7 @@ func Publish(channel *amqp.Channel, exchange string, routingKey string, data []b
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to publish: %s", err)
+		return fmt.Errorf("Failed to publish: %w", err)
 	}
 
 	return nil
@@ -33,7 +33,7 @@ func enablePublisherConfirms(channel *amqp.Channel, confirmHandler func(amqp.Con
 
 	err := channel.Confirm(false)
 	if err != nil {
-		return fmt.Errorf("Failed to enable publisher confirms: %s", err)
+		return fmt.Errorf("Failed to enable publisher confirms: %w", err)
 	}
 
 	confirms := channel.NotifyPublish(make(chan amqp.Confirmation, 1))

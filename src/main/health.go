@@ -25,9 +25,9 @@ func handleHealthRequest(mongoClient *mongo.Client, rabbitClient *rabbitmq.Clien
 				func(ctx context.Context) error {
 					select {
 					case err := <-rabbitClient.ConnectionIsClosed:
-						return fmt.Errorf("Connection to RabbitMQ is closed: %s", err)
+						return fmt.Errorf("Connection to RabbitMQ is closed: %w", err)
 					case err := <-rabbitClient.ChannelIsClosed:
-						return fmt.Errorf("Channel to RabbitMQ is closed: %s", err)
+						return fmt.Errorf("Channel to RabbitMQ is closed: %w", err)
 					default:
 					}
 					return nil
