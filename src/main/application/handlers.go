@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/streadway/amqp"
@@ -10,52 +11,72 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"maibornwolff.de/gomic/model"
 	"maibornwolff.de/gomic/rabbitmq"
+	"net/http"
+	"time"
 )
 
-func HandlePersonsRequest(ctx *gin.Context, mongoClient *mongo.Client, database string, collection string) {
-	cursor, err := mongoClient.Database(database).Collection(collection).Find(ctx, bson.M{})
+const (
+	handlerTimeout = 5 * time.Second
+)
+
+func HandlePersonsRequest(ginContext *gin.Context, mongoClient *mongo.Client, database string, collection string) {
+	timedContext, cancelTimedContext := context.WithTimeout(ginContext, handlerTimeout)
+	defer cancelTimedContext()
+
+	cursor, err := mongoClient.Database(database).Collection(collection).Find(timedContext, bson.M{})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to find documents")
+		abortWithError(ginContext, http.StatusInternalServerError, "Failed to find documents", err)
 		return
 	}
-	defer cursor.Close(ctx)
+	defer cursor.Close(timedContext)
 
 	persons := make([]model.Person, 0)
-	err = cursor.All(ctx, &persons)
+	err = cursor.All(ginContext, &persons)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to decode documents")
+		abortWithError(ginContext, http.StatusInternalServerError, "Failed to decode documents", err)
 		return
 	}
+
 	log.Info().Msgf("Found %d Persons", len(persons))
 
-	ctx.JSON(200, persons)
+	ginContext.JSON(http.StatusOK, persons)
 }
 
-func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) {
+func abortWithError(ginContext *gin.Context, httpStatusCode int, publicErrorMessage string, internalError error) {
+	log.Error().Err(internalError).Msg(publicErrorMessage)
+	ginContext.AbortWithStatusJSON(httpStatusCode, gin.H{
+		"code":  httpStatusCode,
+		"error": publicErrorMessage,
+	})
+}
+
+func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) error {
 	log.Info().Bytes("personData", personData).Msg("Handle incoming RabbitMQ message")
+
+	timedContext, cancelTimedContext := context.WithTimeout(ctx, handlerTimeout)
+	defer cancelTimedContext()
 
 	var person model.Person
 	err := json.Unmarshal(personData, &person)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal JSON to Person")
-		return
+		return fmt.Errorf("Failed to unmarshal JSON to Person: %w", err)
 	}
 
-	_, err = mongoClient.Database(database).Collection(collection).InsertOne(ctx, person)
+	_, err = mongoClient.Database(database).Collection(collection).InsertOne(timedContext, person)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to insert Person into MongoDB")
-		return
+		return fmt.Errorf("Failed to insert Person into MongoDB: %w", err)
 	}
 
 	upperCasedPerson := person.WithUpperCase()
 	upperCasedPersonData, err := json.Marshal(upperCasedPerson)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal Person in upper case to JSON")
-		return
+		return fmt.Errorf("Failed to marshal Person in upper case to JSON: %w", err)
 	}
 
 	err = rabbitmq.Publish(rabbitChannel, exchange, routingKey, upperCasedPersonData, "application/json")
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to publish RabbitMQ message")
+		return fmt.Errorf("Failed to publish RabbitMQ message: %w", err)
 	}
+
+	return nil
 }

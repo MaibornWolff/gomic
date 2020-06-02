@@ -57,8 +57,8 @@ func main() {
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
 		rabbitClient.Channel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
-		func(delivery amqp.Delivery) {
-			application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
+		func(delivery amqp.Delivery) error {
+			return application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to consume")
