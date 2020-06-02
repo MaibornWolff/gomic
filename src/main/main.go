@@ -39,26 +39,26 @@ func main() {
 	}
 	defer mongoClient.Disconnect(ctx)
 
-	rabbitConnection, rabbitConnectionIsClosed, rabbitChannel, err := rabbitmq.Connect(config.Rabbitmq.Host, rabbitmq.SimplePublisherConfirmHandler)
+	rabbitClient, err := rabbitmq.Connect(config.Rabbitmq.Host, rabbitmq.SimplePublisherConfirmHandler)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to RabbitMQ")
 	}
-	defer rabbitConnection.Close()
+	defer rabbitClient.Close()
 
-	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.IncomingExchangeType)
+	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.IncomingExchange, config.Rabbitmq.IncomingExchangeType)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to declare incoming exchange")
 	}
 
-	err = rabbitmq.DeclareSimpleExchange(rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.OutgoingExchangeType)
+	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.OutgoingExchange, config.Rabbitmq.OutgoingExchangeType)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to declare outgoing exchange")
 	}
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
-		rabbitChannel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
+		rabbitClient.Channel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
 		func(delivery amqp.Delivery) {
-			application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitChannel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
+			application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to consume")
@@ -69,7 +69,7 @@ func main() {
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitConnectionIsClosed)))
+	router.GET("/health", gin.WrapH(handleHealthRequest(mongoClient, rabbitClient)))
 
 	router.GET("/persons", func(ctx *gin.Context) {
 		application.HandlePersonsRequest(ctx, mongoClient, config.Mongodb.Database, config.Mongodb.Collection)

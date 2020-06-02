@@ -6,34 +6,64 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func Connect(amqpURI string, publisherConfirmHandler func(amqp.Confirmation)) (*amqp.Connection, chan *amqp.Error, *amqp.Channel, error) {
+type Client struct {
+	Connection         *amqp.Connection
+	ConnectionIsClosed chan *amqp.Error
+	Channel            *amqp.Channel
+	ChannelIsClosed    chan *amqp.Error
+}
+
+func Connect(amqpURI string, publisherConfirmHandler func(amqp.Confirmation)) (*Client, error) {
 	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Failed to dial: %s", err)
+		return nil, fmt.Errorf("Failed to dial: %s", err)
 	}
 
-	connectionIsClosed := make(chan *amqp.Error)
-	connection.NotifyClose(connectionIsClosed)
+	connectionIsClosed := connection.NotifyClose(make(chan *amqp.Error, 1))
 
 	channel, err := connection.Channel()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Failed to open channel: %s", err)
+		return nil, fmt.Errorf("Failed to open channel: %s", err)
 	}
+
+	channelIsClosed := channel.NotifyClose(make(chan *amqp.Error, 1))
 
 	if publisherConfirmHandler != nil {
 		err = enablePublisherConfirms(channel, publisherConfirmHandler)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Failed to enable publisher confirms: %s", err)
+			return nil, fmt.Errorf("Failed to enable publisher confirms: %s", err)
 		}
 	}
 
 	log.Info().Msg("Connected to RabbitMQ")
 
-	return connection, connectionIsClosed, channel, nil
+	go func() {
+		log.Warn().
+			Err(<-connection.NotifyClose(make(chan *amqp.Error))).
+			Msg("Connection to RabbitMQ is closed")
+	}()
+
+	go func() {
+		log.Warn().
+			Err(<-channel.NotifyClose(make(chan *amqp.Error))).
+			Msg("Channel to RabbitMQ is closed")
+	}()
+
+	return &Client{
+		connection,
+		connectionIsClosed,
+		channel,
+		channelIsClosed,
+	}, nil
 }
 
-func DeclareSimpleExchange(channel *amqp.Channel, exchange string, exchangeType string) error {
-	err := channel.ExchangeDeclare(
+func (client *Client) Close() {
+	client.Channel.Close()
+	client.Connection.Close()
+}
+
+func (client *Client) DeclareSimpleExchange(exchange string, exchangeType string) error {
+	err := client.Channel.ExchangeDeclare(
 		exchange,
 		exchangeType,
 		true,
