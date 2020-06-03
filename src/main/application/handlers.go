@@ -12,6 +12,7 @@ import (
 	"maibornwolff.de/gomic/model"
 	"maibornwolff.de/gomic/rabbitmq"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -50,8 +51,10 @@ func abortWithError(ginContext *gin.Context, httpStatusCode int, publicErrorMess
 	})
 }
 
-func HandleIncomingMessage(ctx context.Context, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) error {
+func HandleIncomingMessage(ctx context.Context, wg *sync.WaitGroup, personData []byte, mongoClient *mongo.Client, database string, collection string, rabbitChannel *amqp.Channel, exchange string, routingKey string) error {
 	log.Info().Bytes("personData", personData).Msg("Handle incoming RabbitMQ message")
+
+	defer wg.Done()
 
 	timedContext, cancelTimedContext := context.WithTimeout(ctx, handlerTimeout)
 	defer cancelTimedContext()

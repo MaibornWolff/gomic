@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -55,10 +56,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to declare outgoing exchange")
 	}
 
+	var rabbitHandlerWaitGroup sync.WaitGroup
+
 	cancelRabbitConsumer, err := rabbitmq.Consume(
 		rabbitClient.Channel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
 		func(delivery amqp.Delivery) error {
-			return application.HandleIncomingMessage(ctx, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
+			rabbitHandlerWaitGroup.Add(1)
+			return application.HandleIncomingMessage(ctx, &rabbitHandlerWaitGroup, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
 		})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to consume")
@@ -86,4 +90,6 @@ func main() {
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 	<-shutdown
 	log.Info().Msg("Received signal to shutdown")
+	log.Info().Msg("Waiting for handlers to finish")
+	rabbitHandlerWaitGroup.Wait()
 }
