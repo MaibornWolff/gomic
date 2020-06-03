@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	handlerTimeout = 5 * time.Second
+	handlerTimeout = 10 * time.Second
 )
 
 func HandlePersonsRequest(ginContext *gin.Context, mongoClient *mongo.Client, database string, collection string) {
@@ -32,7 +32,7 @@ func HandlePersonsRequest(ginContext *gin.Context, mongoClient *mongo.Client, da
 	defer cursor.Close(timedContext)
 
 	persons := make([]model.Person, 0)
-	err = cursor.All(ginContext, &persons)
+	err = cursor.All(timedContext, &persons)
 	if err != nil {
 		abortWithError(ginContext, http.StatusInternalServerError, "Failed to decode documents", err)
 		return
