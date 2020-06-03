@@ -10,12 +10,12 @@ services:
       - MONGODB_DATABASE=db
       - MONGODB_COLLECTION=persons
       - RABBITMQ_HOST=amqp://guest:guest@rabbitmq:5672
-      - RABBITMQ_INCOMING_EXCHANGE=incoming-exchange
-      - RABBITMQ_QUEUE=test-queue
-      - RABBITMQ_BINDING_KEY=simple-binding-key
+      - RABBITMQ_SOURCE_EXCHANGE=source-exchange
+      - RABBITMQ_SOURCE_QUEUE=source-queue
+      - RABBITMQ_SOURCE_ROUTING_KEY=source-routing-key
       - RABBITMQ_CONSUMER_TAG=simple-consumer
-      - RABBITMQ_OUTGOING_EXCHANGE=outgoing-exchange
-      - RABBITMQ_ROUTING_KEY=simple-routing-key
+      - RABBITMQ_DESTINATION_EXCHANGE=destination-exchange
+      - RABBITMQ_DESTINATION_ROUTING_KEY=destination-routing-key
     depends_on:
       - mongodb
       - rabbitmq

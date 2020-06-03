@@ -46,23 +46,23 @@ func main() {
 	}
 	defer rabbitClient.Close()
 
-	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.IncomingExchange, config.Rabbitmq.IncomingExchangeType)
+	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.Source.Exchange, config.Rabbitmq.Source.ExchangeType)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to declare incoming exchange")
+		log.Fatal().Err(err).Msg("Failed to declare source exchange")
 	}
 
-	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.OutgoingExchange, config.Rabbitmq.OutgoingExchangeType)
+	err = rabbitClient.DeclareSimpleExchange(config.Rabbitmq.Destination.Exchange, config.Rabbitmq.Destination.ExchangeType)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to declare outgoing exchange")
+		log.Fatal().Err(err).Msg("Failed to declare destination exchange")
 	}
 
 	var rabbitHandlerWaitGroup sync.WaitGroup
 
 	cancelRabbitConsumer, err := rabbitmq.Consume(
-		rabbitClient.Channel, config.Rabbitmq.IncomingExchange, config.Rabbitmq.Queue, config.Rabbitmq.BindingKey, config.Rabbitmq.ConsumerTag,
+		rabbitClient.Channel, config.Rabbitmq.Source.Exchange, config.Rabbitmq.Source.Queue, config.Rabbitmq.Source.RoutingKey, config.Rabbitmq.ConsumerTag,
 		func(delivery amqp.Delivery) error {
 			rabbitHandlerWaitGroup.Add(1)
-			return application.HandleIncomingMessage(ctx, &rabbitHandlerWaitGroup, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.OutgoingExchange, config.Rabbitmq.RoutingKey)
+			return application.HandleIncomingMessage(ctx, &rabbitHandlerWaitGroup, delivery.Body, mongoClient, config.Mongodb.Database, config.Mongodb.Collection, rabbitClient.Channel, config.Rabbitmq.Destination.Exchange, config.Rabbitmq.Destination.RoutingKey)
 		})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to consume")
