@@ -1,16 +1,6 @@
 #!/bin/bash
+
 set -e
-
-curl --silent --show-error --fail -O http://localhost:15672/cli/rabbitmqadmin
-
-function rabbitmq() {
-  python3 rabbitmqadmin "$@"
-}
-
-source .env
-
-RABBITMQ_DESTINATION_QUEUE=e2e-test-destination-queue
-RABBITMQ_MESSAGE_TO_PUBLISH='{"firstName":"John","lastName":"Doe"}'
 
 echo "gomic's end-to-end test:"
 echo "  * publish a message to the source exchange"
@@ -18,6 +8,20 @@ echo "  * let it process by gomic"
 echo "  * assert that the message is delivered to the destination queue in upper case"
 echo "  * assert that the message is available via the HTTP endpoint"
 echo "==="
+
+until curl http://gomic:$HTTP_SERVER_PORT/health --silent --fail -o /dev/null; do
+  echo "gomic is not ready yet..."
+  sleep 5
+done
+
+curl --silent --show-error --fail -O http://rabbitmq:15672/cli/rabbitmqadmin
+
+function rabbitmq() {
+  python3 rabbitmqadmin --host rabbitmq "$@"
+}
+
+RABBITMQ_DESTINATION_QUEUE=e2e-test-destination-queue
+RABBITMQ_MESSAGE_TO_PUBLISH='{"firstName":"John","lastName":"Doe"}'
 
 rabbitmq declare queue \
   name=$RABBITMQ_DESTINATION_QUEUE durable=false
@@ -32,7 +36,7 @@ RABBITMQ_MESSAGE=$(rabbitmq get \
   queue=$RABBITMQ_DESTINATION_QUEUE ackmode=ack_requeue_false)
 
 HTTP_RESPONSE=$(curl --silent --show-error --fail \
-  http://localhost:8080/persons)
+  http://gomic:$HTTP_SERVER_PORT/persons)
 
 echo "==="
 

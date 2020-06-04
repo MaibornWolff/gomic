@@ -1,4 +1,4 @@
-version: "3"
+version: "3.7"
 
 services:
   gomic:
@@ -28,6 +28,18 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    networks:
+      - gomic-network
+
+  e2e_test:
+    image: python:buster
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ./e2e_test.sh
+        target: /e2e_test.sh
+    command: ["/bin/bash", "/e2e_test.sh"]
     networks:
       - gomic-network
 
