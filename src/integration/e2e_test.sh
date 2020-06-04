@@ -7,15 +7,9 @@ function rabbitmq() {
   python3 rabbitmqadmin "$@"
 }
 
-# Set up by gomic
-SOURCE_EXCHANGE=source-exchange
-SOURCE_ROUTING_KEY=source-routing-key
+source .env
 
-# Set up by this script
-DESTINATION_EXCHANGE=destination-exchange
-DESTINATION_QUEUE=e2e-test-destination-queue
-DESTINATION_ROUTING_KEY=destination-routing-key
-
+RABBITMQ_DESTINATION_QUEUE=e2e-test-destination-queue
 RABBITMQ_MESSAGE_TO_PUBLISH='{"firstName":"John","lastName":"Doe"}'
 
 echo "gomic's end-to-end test:"
@@ -26,16 +20,16 @@ echo "  * assert that the message is available via the HTTP endpoint"
 echo "==="
 
 rabbitmq declare queue \
-  name=$DESTINATION_QUEUE durable=false
+  name=$RABBITMQ_DESTINATION_QUEUE durable=false
 
 rabbitmq declare binding \
-  source=$DESTINATION_EXCHANGE destination_type=queue destination=$DESTINATION_QUEUE routing_key=$DESTINATION_ROUTING_KEY
+  source=$RABBITMQ_DESTINATION_EXCHANGE destination_type=queue destination=$RABBITMQ_DESTINATION_QUEUE routing_key=$RABBITMQ_DESTINATION_ROUTING_KEY
 
 rabbitmq publish \
-  exchange=$SOURCE_EXCHANGE routing_key=$SOURCE_ROUTING_KEY payload="$RABBITMQ_MESSAGE_TO_PUBLISH"
+  exchange=$RABBITMQ_SOURCE_EXCHANGE routing_key=$RABBITMQ_SOURCE_ROUTING_KEY payload="$RABBITMQ_MESSAGE_TO_PUBLISH"
 
 RABBITMQ_MESSAGE=$(rabbitmq get \
-  queue=$DESTINATION_QUEUE ackmode=ack_requeue_false)
+  queue=$RABBITMQ_DESTINATION_QUEUE ackmode=ack_requeue_false)
 
 HTTP_RESPONSE=$(curl --silent --show-error --fail \
   http://localhost:8080/persons)
