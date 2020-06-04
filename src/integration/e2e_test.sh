@@ -1,14 +1,10 @@
 #!/bin/bash
 set -e
 
-RABBITMQADMIN=./rabbitmqadmin
-if ! [[ -f $RABBITMQADMIN ]]; then
-  curl --silent --show-error --fail -o $RABBITMQADMIN \
-    https://raw.githubusercontent.com/rabbitmq/rabbitmq-management/v3.8.x/bin/rabbitmqadmin
-fi
+curl --silent --show-error --fail -O http://localhost:15672/cli/rabbitmqadmin
 
 function rabbitmq() {
-  python3 $RABBITMQADMIN "$@"
+  python3 rabbitmqadmin "$@"
 }
 
 # Set up by gomic
