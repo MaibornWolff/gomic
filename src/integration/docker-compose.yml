@@ -32,7 +32,7 @@ services:
       - gomic-network
 
   e2e_test:
-    image: python:buster
+    image: fedora
     env_file:
       - .env
     volumes:
