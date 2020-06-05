@@ -9,8 +9,14 @@ echo "  * assert that the message is delivered to the destination queue in upper
 echo "  * assert that the message is available via the HTTP endpoint"
 echo "==="
 
+RETRIES=10
 until curl http://gomic:$HTTP_SERVER_PORT/health --silent --fail -o /dev/null; do
   echo "gomic is not ready yet..."
+  ((RETRIES--))
+  if [[ $RETRIES -eq 0 ]]; then
+    echo "Test aborted"
+    exit 1
+  fi
   sleep 5
 done
 
@@ -24,16 +30,16 @@ RABBITMQ_DESTINATION_QUEUE=e2e-test-destination-queue
 RABBITMQ_MESSAGE_TO_PUBLISH='{"firstName":"John","lastName":"Doe"}'
 
 rabbitmq declare queue \
-  name=$RABBITMQ_DESTINATION_QUEUE durable=false
+  name="$RABBITMQ_DESTINATION_QUEUE" durable=false
 
 rabbitmq declare binding \
-  source=$RABBITMQ_DESTINATION_EXCHANGE destination_type=queue destination=$RABBITMQ_DESTINATION_QUEUE routing_key=$RABBITMQ_DESTINATION_ROUTING_KEY
+  source="$RABBITMQ_DESTINATION_EXCHANGE" destination_type=queue destination="$RABBITMQ_DESTINATION_QUEUE" routing_key="$RABBITMQ_DESTINATION_ROUTING_KEY"
 
 rabbitmq publish \
-  exchange=$RABBITMQ_SOURCE_EXCHANGE routing_key=$RABBITMQ_SOURCE_ROUTING_KEY payload="$RABBITMQ_MESSAGE_TO_PUBLISH"
+  exchange="$RABBITMQ_SOURCE_EXCHANGE" routing_key="$RABBITMQ_SOURCE_ROUTING_KEY" payload="$RABBITMQ_MESSAGE_TO_PUBLISH"
 
 RABBITMQ_MESSAGE=$(rabbitmq get \
-  queue=$RABBITMQ_DESTINATION_QUEUE ackmode=ack_requeue_false)
+  queue="$RABBITMQ_DESTINATION_QUEUE" ackmode=ack_requeue_false)
 
 HTTP_RESPONSE=$(curl --silent --show-error --fail \
   http://gomic:$HTTP_SERVER_PORT/persons)
